@@ -1,6 +1,6 @@
 package renderer;
 
-import java.awt.Color;
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -88,15 +88,107 @@ public class Pipeline {
 		return processSceneWithMatrix(scene, rotationMatrix);
 	}
 
+	public static Scene autoScaleAndTranslate(Scene scene, float[] sceneBoundary, Dimension dimension) {
+
+		float left = sceneBoundary[0];
+		float right = sceneBoundary[1];
+		float up = sceneBoundary[2];
+		float down = sceneBoundary[3];
+		float close = sceneBoundary[4];
+		float far = sceneBoundary[5];
+
+		float objectWidth = right - left;
+		float objectHeight = down - up;
+		float objectdepth = far - close;
+		int canvasWidth = dimension.width;
+		int canvasHeight = dimension.height;
+
+		// Auto-scale
+		float ratioHorizontal = canvasWidth / 2 / objectWidth;
+		float ratioVertical = canvasHeight / 2 / objectHeight;
+		float ratioDepth = Math.min(canvasWidth, canvasHeight) / 2 / objectdepth;
+
+		float scale = Math.min(Math.min(ratioHorizontal, ratioVertical), ratioDepth);
+		Transform scaleMatrix = Transform.newScale(scale, scale, scale);
+		Scene scaledScene = processSceneWithMatrix(scene, scaleMatrix);
+
+		// Auto-translate
+		float scaledLeft = left * scale;
+		float scaledUp = up * scale;
+
+		// work out how much to shift horizontally
+		float scaledObjectWidth = objectWidth * scale;
+		float centralPosX = (canvasWidth - scaledObjectWidth) / 2;
+		float horizontalShift = centralPosX - scaledLeft;
+
+		// work out how much to shift vertically
+		float scaledObjectHeight = objectHeight * scale;
+		float centralPosY = (canvasHeight - scaledObjectHeight) / 2;
+		float verticalShift = centralPosY - scaledUp;
+
+		Transform translationMatrix = Transform.newTranslation(horizontalShift, verticalShift, 0f);
+		return processSceneWithMatrix(scaledScene, translationMatrix);
+	}
+
+	public static Scene autoScale(Scene scene, float[] sceneBoundary, Dimension dimension) {
+
+		float left = sceneBoundary[0];
+		float right = sceneBoundary[1];
+		float up = sceneBoundary[2];
+		float down = sceneBoundary[3];
+		float close = sceneBoundary[4];
+		float far = sceneBoundary[5];
+
+		float objectWidth = right - left;
+		float objectHeight = down - up;
+		float objectdepth = far - close;
+		int canvasWidth = dimension.width;
+		int canvasHeight = dimension.height;
+
+		// Auto-scale
+		float ratioHorizontal = canvasWidth / 2 / objectWidth;
+		float ratioVertical = canvasHeight / 2 / objectHeight;
+		float ratioDepth = Math.min(canvasWidth, canvasHeight) / 2 / objectdepth;
+
+		float scale = Math.min(Math.min(ratioHorizontal, ratioVertical), ratioDepth);
+		Transform scaleMatrix = Transform.newScale(scale, scale, scale);
+		return processSceneWithMatrix(scene, scaleMatrix);
+	}
+
+	public static Scene autoTranslate(Scene scene, float[] sceneBoundary, Dimension dimension) {
+
+		float left = sceneBoundary[0];
+		float right = sceneBoundary[1];
+		float up = sceneBoundary[2];
+		float down = sceneBoundary[3];
+
+		float objectWidth = right - left;
+		float objectHeight = down - up;
+		int canvasWidth = dimension.width;
+		int canvasHeight = dimension.height;
+
+		// work out how much to shift horizontally
+		float centralPosX = (canvasWidth - objectWidth) / 2;
+		float horizontalShift = centralPosX - left;
+
+		// work out how much to shift vertically
+		float centralPosY = (canvasHeight - objectHeight) / 2;
+		float verticalShift = centralPosY - up;
+
+		Transform translationMatrix = Transform.newTranslation(horizontalShift, verticalShift, 0f);
+		return processSceneWithMatrix(scene, translationMatrix);
+	}
+
 	/**
 	 * This should translate the scene by the appropriate amount.
 	 * 
 	 * @param scene
 	 * @return
 	 */
-	public static Scene translateScene(Scene scene) {
-		// TODO fill this in.
-		return null;
+	public static Scene translateScene(Scene scene, float tx, float ty, float tz) {
+		// the translation matrix
+		Transform translationMatrix = Transform.newTranslation(tx, ty, tz);
+		return processSceneWithMatrix(scene, translationMatrix);
 	}
 
 	/**
@@ -105,9 +197,10 @@ public class Pipeline {
 	 * @param scene
 	 * @return
 	 */
-	public static Scene scaleScene(Scene scene) {
-		// TODO fill this in.
-		return null;
+	public static Scene scaleScene(Scene scene, float sx, float sy, float sz) {
+		// the scale matrix
+		Transform scaleMatrix = Transform.newScale(sx, sy, sz);
+		return processSceneWithMatrix(scene, scaleMatrix);
 	}
 
 	/**
@@ -199,7 +292,42 @@ public class Pipeline {
 	 *            The colour of the polygon to add into the zbuffer.
 	 */
 	public static void computeZBuffer(Color[][] zbuffer, float[][] zdepth, EdgeList polyEdgeList, Color polyColor) {
-		// TODO fill this in.
+		int startY = polyEdgeList.getStartY();
+		int endY = polyEdgeList.getEndY();
+		int height = endY - startY;
+
+		int y = 0;
+		while (y < height) {
+
+			// do not render pixels that are out-of-boundary
+			if (y + startY < 0 || y + startY >= zbuffer[0].length) {
+				y++;
+				continue;
+			}
+
+			int x = (int) polyEdgeList.getLeftX(y);
+			int rightX = (int) polyEdgeList.getRightX(y);
+			float z = polyEdgeList.getLeftZ(y);
+			float rightZ = polyEdgeList.getRightZ(y);
+			float mz = (rightZ - z) / (rightX - x);
+
+			while (x < rightX) {
+				// do not render pixels that are out-of-boundary
+				if (x < 0 || x >= zbuffer.length) {
+					z += mz;
+					x++;
+					continue;
+				}
+
+				if (z < zdepth[x][y + startY]) {
+					zdepth[x][y + startY] = z;
+					zbuffer[x][y + startY] = polyColor;
+				}
+				z += mz;
+				x++;
+			}
+			y++;
+		}
 	}
 }
 

@@ -154,6 +154,8 @@ public abstract class GUI {
 				}
 			}
 		});
+
+
 		// we have to put the button in its own panel to ensure it fills the
 		// full width of the control bar.
 		JPanel loadpanel = new JPanel(new BorderLayout());
